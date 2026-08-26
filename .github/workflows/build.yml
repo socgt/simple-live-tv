@@ -48,7 +48,9 @@ jobs:
 
       - name: Install Android SDK packages & NDK
         run: |
-          yes | sdkmanager --licenses
+          # setup-android 步骤通常已接受许可证；这里兜底接受，
+          # 并用 || true 吸收 pipefail 下 yes 的 SIGPIPE（Broken pipe）退出码。
+          yes | sdkmanager --licenses || true
           sdkmanager \
             "platforms;android-35" \
             "build-tools;35.0.0" \
