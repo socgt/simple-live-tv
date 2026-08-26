@@ -63,12 +63,15 @@ jobs:
       # 注意：每次构建的签名都不同，仅适合侧载/测试。
       # 若要发布可升级的版本，请在仓库 Secrets 中配置正式 keystore（见 README）。
       - name: Generate ephemeral signing key
-        working-directory: simple_live_tv_app/android
         run: |
+          # key.properties 由 rootProject 加载 -> android/key.properties
+          # 但 storeFile = file("key.jks") 在 :app 模块里，相对的是 android/app/
+          # 因此 keystore 必须生成在 android/app/key.jks
+          cd simple_live_tv_app/android/app
           keytool -genkeypair -v -keystore key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -alias simple_live_tv -storepass android -keypass android \
             -dname "CN=SimpleLiveTV, OU=CI, O=SimpleLiveTV, L=CI, S=CI, C=CN"
-          cat > key.properties <<'EOF'
+          cat > ../key.properties <<'EOF'
           storePassword=android
           keyPassword=android
           keyAlias=simple_live_tv
