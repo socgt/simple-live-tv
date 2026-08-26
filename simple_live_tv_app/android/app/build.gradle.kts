@@ -52,15 +52,12 @@ android {
 
     buildTypes {
         release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Signing with the release keystore (key.properties) for a distributable TV APK.
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                // Default file with automatically generated optimization rules.
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // Minify/shrink disabled: R8 is memory-heavy and this 7 GB build box OOMs the
+            // Gradle daemon under minify. APK is larger but still a valid, signed release.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
