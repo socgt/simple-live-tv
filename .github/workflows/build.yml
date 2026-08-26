@@ -54,6 +54,8 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       # 无需任何 Secret：在 CI 内自动生成一个临时签名密钥。
       # 注意：每次构建的签名都不同，仅适合侧载/测试。
@@ -61,7 +63,7 @@ jobs:
       - name: Generate ephemeral signing key
         working-directory: simple_live_tv_app/android
         run: |
-          keytool -genkeypair -v -keystore app/key.jks -keyalg RSA -keysize 2048 -validity 10000 \
+          keytool -genkeypair -v -keystore key.jks -keyalg RSA -keysize 2048 -validity 10000 \
             -alias simple_live_tv -storepass android -keypass android \
             -dname "CN=SimpleLiveTV, OU=CI, O=SimpleLiveTV, L=CI, S=CI, C=CN"
           cat > key.properties <<'EOF'
