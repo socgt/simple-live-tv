@@ -64,6 +64,85 @@ class DouyinSite implements LiveSite {
     }
   }
 
+  /// 从抖音首页嵌入的(已转义) JSON 中精确截取 categoryData 数组。
+  /// 原正则会把 React flight 数据卷进来导致 json.decode 失败，这里改用括号配平只取数组本身。
+  List _extractCategoryData(String html) {
+    const marker = r'\"categoryData\":[';
+    final idx = html.indexOf(marker);
+    if (idx == -1) return [];
+    final start = idx + marker.length - 1; // 指向开头的 '['
+    var depth = 0;
+    var end = -1;
+    for (var i = start; i < html.length; i++) {
+      final ch = html[i];
+      if (ch == '\\') {
+        i++; // 跳过转义字符（\" \\ \n \[ \] 等）
+        continue;
+      }
+      if (ch == '[') {
+        depth++;
+      } else if (ch == ']') {
+        depth--;
+        if (depth == 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end == -1) return [];
+    final arrStr = html.substring(start, end + 1);
+    return json.decode(
+          arrStr.replaceAll('\\"', '"').replaceAll('\\\\', '\\'),
+        ) as List;
+  }
+
+  /// 从直播间网页嵌入的(已转义) JSON 中精确截取 state 对象。
+  /// 原正则会把 React flight 数据卷进来导致 json.decode 失败，这里改用括号配平（字符串感知）。
+  Map _extractRoomState(String html) {
+    const marker = r'\"state\":{';
+    final idx = html.indexOf(marker);
+    if (idx == -1) return {};
+    final start = idx + marker.length - 1; // 指向开头的 '{'
+    var depth = 0;
+    var inStr = false;
+    var escaped = false;
+    var end = -1;
+    for (var i = start; i < html.length; i++) {
+      final c = html[i];
+      if (inStr) {
+        if (escaped) {
+          escaped = false;
+        } else if (c == '\\') {
+          escaped = true;
+        } else if (c == '"') {
+          inStr = false;
+        }
+        continue;
+      }
+      if (c == '\\') {
+        i++; // 转义序列（如 \" \\ \n），跳过下一个字符
+        continue;
+      }
+      if (c == '"') {
+        inStr = true;
+        continue;
+      }
+      if (c == '{') {
+        depth++;
+      } else if (c == '}') {
+        depth--;
+        if (depth == 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end == -1) return {};
+    final raw = html.substring(start, end + 1);
+    final decoded = raw.replaceAll('\\"', '"').replaceAll('\\\\', '\\');
+    return json.decode(decoded) as Map;
+  }
+
   @override
   Future<List<LiveCategory>> getCategores() async {
     List<LiveCategory> categories = [];
@@ -73,20 +152,15 @@ class DouyinSite implements LiveSite {
       header: await getRequestHeaders(),
     );
 
-    var renderData =
-        RegExp(
-          r'\{\\"pathname\\":\\"\/\\",\\"categoryData.*?\]\\n',
-        ).firstMatch(result)?.group(0) ??
-        "";
-    var renderDataJson = json.decode(
-      renderData
-          .trim()
-          .replaceAll('\\"', '"')
-          .replaceAll(r"\\", r"\")
-          .replaceAll(']\\n', ""),
-    );
+    List categoryData;
+    try {
+      categoryData = _extractCategoryData(result);
+    } catch (e) {
+      _logDebug("获取分类失败: $e");
+      return categories;
+    }
 
-    for (var item in renderDataJson["categoryData"]) {
+    for (var item in categoryData) {
       List<LiveSubCategory> subs = [];
       var id = '${item["partition"]["id_str"]},${item["partition"]["type"]}';
       for (var subItem in item["sub_partition"]) {
@@ -461,18 +535,14 @@ class DouyinSite implements LiveSite {
       },
     );
 
-    var renderData =
-        RegExp(
-          r'\{\\"state\\":\{\\"appStore.*?\]\\n',
-        ).firstMatch(result)?.group(0) ??
-        "";
-    var str = renderData
-        .trim()
-        .replaceAll('\\"', '"')
-        .replaceAll(r"\\", r"\")
-        .replaceAll(']\\n', "");
-    var renderDataJson = json.decode(str);
-    return renderDataJson["state"];
+    Map roomState;
+    try {
+      roomState = _extractRoomState(result);
+    } catch (e) {
+      _logDebug("获取直播间网页数据失败: $e");
+      rethrow;
+    }
+    return roomState;
   }
 
   /// 通过webRid获取直播间Web信息
