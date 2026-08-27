@@ -143,6 +143,24 @@ class DouyinSite implements LiveSite {
     return json.decode(decoded) as Map;
   }
 
+  /// 递归展开抖音分类的所有层级（一级分类下的 sub_partition 可能嵌套多层），
+  /// 把每一层都作为一个可点击子分类加入列表，三级（如 DOTA2、炉石传说）紧跟在二级之后。
+  List<LiveSubCategory> _expandSubPartitions(List subs, String parentId) {
+    List<LiveSubCategory> result = [];
+    for (var subItem in subs) {
+      final p = subItem["partition"];
+      if (p == null) continue;
+      final pid = '${p["id_str"]},${p["type"]}';
+      final pname = asT<String?>(p["title"]) ?? "";
+      result.add(LiveSubCategory(id: pid, name: pname, parentId: parentId, pic: ""));
+      final subSubs = subItem["sub_partition"];
+      if (subSubs is List && subSubs.isNotEmpty) {
+        result.addAll(_expandSubPartitions(subSubs, pid));
+      }
+    }
+    return result;
+  }
+
   @override
   Future<List<LiveCategory>> getCategores() async {
     List<LiveCategory> categories = [];
@@ -161,17 +179,11 @@ class DouyinSite implements LiveSite {
     }
 
     for (var item in categoryData) {
-      List<LiveSubCategory> subs = [];
       var id = '${item["partition"]["id_str"]},${item["partition"]["type"]}';
-      for (var subItem in item["sub_partition"]) {
-        var subCategory = LiveSubCategory(
-          id: '${subItem["partition"]["id_str"]},${subItem["partition"]["type"]}',
-          name: asT<String?>(subItem["partition"]["title"]) ?? "",
-          parentId: id,
-          pic: "",
-        );
-        subs.add(subCategory);
-      }
+      List<LiveSubCategory> subs = _expandSubPartitions(
+        item["sub_partition"] ?? const [],
+        id,
+      );
 
       var category = LiveCategory(
         children: subs,
